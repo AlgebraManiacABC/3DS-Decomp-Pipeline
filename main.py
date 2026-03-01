@@ -1,4 +1,10 @@
 import sys
+from tkinter import filedialog
+
+from files import gather_bearings
+
+EXIT_SUCCESS=0
+EXIT_FAILURE=1
 
 def main(argv: list[str]) -> int:
     """
@@ -7,13 +13,14 @@ def main(argv: list[str]) -> int:
     :return: exit code
     """
 
-    # TODO: Get directory with user-compiled objects
-
-    # TODO: Get binary to split
-
-    # TODO: Get symbol list file
-
-    # TODO: Select or create directory where split objects should go
+    (compiled_dir,
+     binary_file,
+     symbol_file,
+     split_dir) = gather_bearings()
+    print(f"Compiled objects located in: {compiled_dir}")
+    print(f"Binary to split: {binary_file}")
+    print(f"Symbol file: {symbol_file}")
+    print(f"Directory to output split objects: {split_dir}")
 
     # TODO: Create list tuple of Address (start, end) which match a binary
     # TODO: Also keep a list of str which are symbols defined in these binaries and
@@ -28,8 +35,14 @@ def main(argv: list[str]) -> int:
 
     # TODO: Create object files from interstitial space, exporting symbols which are imported by user-compiled objects
 
-    return 0
+    return EXIT_SUCCESS
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv))
+    try:
+        sys.exit(main(sys.argv))
+    except Exception as e:
+        print(f"An issue occurred while running {sys.argv[0]}:")
+        print(e)
+        print("Program aborted.")
+        sys.exit(EXIT_FAILURE)
