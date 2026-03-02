@@ -1,4 +1,6 @@
+import csv
 from pathlib import Path
+from util import Symbol
 try:
     HAS_TKINTER = True
     from tkinter import filedialog
@@ -17,6 +19,18 @@ def gather_compiled_object_files(dirname: str) -> list[Path]:
         if o.suffix == '.o':
             objects.append(o)
     return objects
+
+
+def gather_symbols(sym_file: str) -> list[Symbol]:
+    """
+    :param sym_file: Filename of exported symbol list (Ghidra style)
+    :return: List of symbols
+    """
+    symbols = []
+    reader = csv.DictReader(Path(sym_file).read_text().splitlines())
+    for line in reader:
+        symbols.append(Symbol(int(line["Location"], 16), line["Name"]))
+    return symbols
 
 
 def gather_bearings(argv: list[str]):
@@ -69,6 +83,7 @@ def gather_bearings(argv: list[str]):
         symbol_file = argv[3]
     if not symbol_file:
         raise Exception("Did not pick the symbol file!")
+    symbols = gather_symbols(symbol_file)
 
     if HAS_TKINTER:
         split_dir = filedialog.askdirectory(
@@ -80,4 +95,4 @@ def gather_bearings(argv: list[str]):
     if not split_dir:
         raise Exception("Did not pick the output directory!")
 
-    return compiled_objects, Path(binary_file), Path(symbol_file), Path(split_dir)
+    return compiled_objects, Path(binary_file), symbols, Path(split_dir)

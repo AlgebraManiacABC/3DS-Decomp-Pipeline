@@ -1,5 +1,4 @@
 import sys
-import csv
 from files import gather_bearings
 from ELF import *
 
@@ -15,11 +14,11 @@ def main(argv: list[str]) -> int:
 
     (compiled_objects,
      binary_file,
-     symbol_file,
+     symbols,
      split_dir) = gather_bearings(argv)
     print(f"Compiled objects located in: {compiled_objects[0].parent}")
     print(f"Binary to split: {binary_file}")
-    print(f"Symbol file: {symbol_file}")
+    print(f"Symbol count from symbol file: {len(symbols)}")
     print(f"Directory to output split objects: {split_dir}")
 
     # Locations of matching binaries within the main binary
