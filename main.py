@@ -56,18 +56,18 @@ def main(argv: list[str]) -> int:
         start_addr = next_obj[1] + 1
     # Plan trailing bytes as final object
     if start_addr < len(binary_bytes):
-        to_objectify.append((start_addr, len(binary_bytes)))
+        to_objectify.append((start_addr, len(binary_bytes)-1))
 
     # Create an object file for each interstice
     for start_end in to_objectify:
-        o_file = split_dir / f'{start_end[0]}.o'
+        o_file = split_dir / f'{start_end[0]:08x}.o'
         counter = 1
         while o_file.exists():
-            o_file = split_dir / f'{start_end[0]}_{counter}.o'
+            o_file = split_dir / f'{start_end[0]:08x}_{counter}.o'
             counter += 1
         symbols_in_range = [Symbol(sym.addr - start_end[0], sym.name)
                      for sym in symbols if start_end[0] <= sym.addr <= start_end[1]]
-        o = ELF.from_bytes(binary_bytes[start_end[0]:start_end[1]], start_end[0],
+        o = ELF.from_bytes(binary_bytes[start_end[0]:start_end[1]+1], start_end[0],
                            undefined_symbols, symbols_in_range, o_file)
         o.write(o_file)
 

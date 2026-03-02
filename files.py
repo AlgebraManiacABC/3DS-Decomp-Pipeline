@@ -29,7 +29,13 @@ def gather_symbols(sym_file: str) -> list[Symbol]:
     symbols = []
     reader = csv.DictReader(Path(sym_file).read_text().splitlines())
     for line in reader:
-        symbols.append(Symbol(int(line["Location"], 16), line["Name"]))
+        try:
+            symbols.append(Symbol(int(line["Location"], 16), line["Name"]))
+        except ValueError:
+            pass
+
+    for sym in symbols:
+        sym.addr -= 0x100000
     return symbols
 
 
@@ -39,18 +45,18 @@ def gather_bearings(argv: list[str]):
     """
 
     if not HAS_TKINTER and len(argv) < 5:
-        print(
+        raise Exception(
             f"""
-            Usage: python {Path(argv[0]).root} <compiled_dir> <3ds_binary> <symbol_file> <split_output_dir>
+            Usage: python {Path(argv[0]).name} <compiled_dir> <3ds_binary> <symbol_file> <split_output_dir>
             
             === OR ===
             (if tkinter installed)
             
-            Usage: python {Path(argv[0]).root}
+            Usage: python {Path(argv[0]).name}
             """
         )
 
-    if HAS_TKINTER:
+    if HAS_TKINTER and len(argv) < 5:
         compiled_dir = filedialog.askdirectory(
             initialdir='.',
             mustexist=True,
@@ -64,7 +70,7 @@ def gather_bearings(argv: list[str]):
     if len(compiled_objects) == 0:
         raise Exception(f"No object files found in {compiled_dir}!")
 
-    if HAS_TKINTER:
+    if HAS_TKINTER and len(argv) < 5:
         binary_file = filedialog.askopenfilename(
             filetypes=[("3DS Executable Binary", ".cro code.bin .code"), ("All files", "*")],
             title="Binary to Split"
@@ -74,7 +80,7 @@ def gather_bearings(argv: list[str]):
     if not binary_file:
         raise Exception("Did not pick the binary to split!")
 
-    if HAS_TKINTER:
+    if HAS_TKINTER and len(argv) < 5:
         symbol_file = filedialog.askopenfilename(
             filetypes=[("CSV Files",".csv"), ("All files", "*")],
             title="Symbol file"
@@ -85,7 +91,7 @@ def gather_bearings(argv: list[str]):
         raise Exception("Did not pick the symbol file!")
     symbols = gather_symbols(symbol_file)
 
-    if HAS_TKINTER:
+    if HAS_TKINTER and len(argv) < 5:
         split_dir = filedialog.askdirectory(
             mustexist=False,
             title="Split object output directory"
