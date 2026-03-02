@@ -71,6 +71,9 @@ class BinaryWriter:
     def getvalue(self) -> bytes:
         return self._stream.getvalue()
 
+    def write_str(self, s: str):
+        self._stream.write(s.encode('utf-8') + b'\x00')
+
 
 class RelocationType(IntEnum):
     R_ARM_NONE = 0
