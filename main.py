@@ -41,7 +41,19 @@ def main(argv: list[str]) -> int:
             end_addr = start_addr + len(o.data) - 1
             address_matches.append((start_addr, end_addr))
 
-    # TODO: Create address tuples (start, end) for interstitial space (bytes not matched to a compiled object)
+    # Calculate interstitial space (bytes which were not user-compiled)
+    to_objectify = []
+    address_matches.sort(key=lambda a: a[0])
+    start_addr = 0
+    while address_matches:
+        next_obj = address_matches.pop(0)
+        if next_obj[0] > start_addr:
+            # Plan new object ending just before next start
+            to_objectify.append((start_addr, next_obj[0]-1))
+        start_addr = next_obj[1] + 1
+    # Plan trailing bytes as final object
+    if start_addr < len(binary_bytes):
+        to_objectify.append((start_addr, len(binary_bytes)))
 
     # TODO: Create object files from interstitial space, exporting symbols which are imported by user-compiled objects
 
