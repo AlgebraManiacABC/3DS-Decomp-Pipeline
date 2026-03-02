@@ -1,5 +1,6 @@
 import sys
 from files import gather_bearings
+from ELF import *
 
 EXIT_SUCCESS=0
 EXIT_FAILURE=1
@@ -26,10 +27,18 @@ def main(argv: list[str]) -> int:
     #  (must be exported by a split binary)
     undefined_symbols = []
 
-    # TODO: For each valid .o file in user-compiled object directory,
-    #   1. Get list of relocations (for masking during the search)
-    #   2. Find text/data/etc. in main binary (will be a list of matches in case multiple found)
-    #   3. Add imported symbols to list to find later
+    binary_bytes = binary_file.read_bytes()
+    for o_file in compiled_objects:
+        o = ELF.from_path(o_file)
+        found = find_all_bytes(binary_bytes, o.data, o.mask)
+        undefined_symbols += o.imported_symbols
+        if not found:
+            raise Exception(f"Binary file {o_file} was not found in {binary_file}!")
+
+        print(f"Found {len(found)} {'matches' if len(found) > 1 else 'match'} for {o_file}!")
+        for start_addr in found:
+            end_addr = start_addr + len(o.data) - 1
+            address_matches.append((start_addr, end_addr))
 
     # TODO: Create address tuples (start, end) for interstitial space (bytes not matched to a compiled object)
 
