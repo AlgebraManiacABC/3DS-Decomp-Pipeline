@@ -119,9 +119,11 @@ class SymbolTableEntry:
 
 
 class ELF:
-    def __init__(self, header: ELFHeader, mask: Bitmask):
+    def __init__(self, header: ELFHeader, data: bytes, mask: Bitmask, imported: list[str]):
         self.header = header
+        self.data = data
         self.mask = mask
+        self.imported_symbols = imported
         return
 
     @classmethod
@@ -195,7 +197,7 @@ class ELF:
                     undefined_symbols.append(rel_name)
                     mask.add_relocation(rel_entry)
 
-        return cls(header, mask)
+        return cls(header, bin_bytes, mask, undefined_symbols)
 
     @classmethod
     def from_path(cls, path: Path) -> "ELF":
