@@ -1,4 +1,6 @@
 import hashlib
+from typing import TypeVar, Generic
+
 from util import *
 
 
@@ -30,8 +32,11 @@ class OffSize:
         writer.write_u32(self.size)
 
 
-class OffObject:
-    def __init__(self, off: int, obj: Writable | list[Writable]):
+T = TypeVar("T", bound=Writable)
+
+
+class OffObject(Generic[T]):
+    def __init__(self, off: int, obj: T | list[T]):
         self.off = off
         self.obj = obj
 
@@ -258,7 +263,7 @@ class UnknownRelocationInfo:
 class CRO:
     def __init__(self, misc_info, cro_size, bss_size, misc_info_2,
                  nnroCO: SegmentOffset, OnLoad: SegmentOffset, OnExit: SegmentOffset,
-                 OnUnresolved: SegmentOffset, text_info: OffSize, data_info: OffSize,
+                 OnUnresolved: SegmentOffset, text: OffObject, data: OffObject,
                  module_name: OffObject, segment_table: OffObject, named_export_table: OffObject,
                  indexed_export_table: OffObject, export_strings: OffObject,
                  export_trie: OffObject, import_module_table: OffObject,
@@ -274,8 +279,8 @@ class CRO:
         self.OnLoad = OnLoad
         self.OnExit = OnExit
         self.OnUnresolved = OnUnresolved
-        self.text_info = text_info
-        self.data_info = data_info
+        self.text = text
+        self.data = data
         self.module_name = module_name
         self.segment_table = segment_table
         self.named_export_table = named_export_table
@@ -292,6 +297,12 @@ class CRO:
         self.internal_relocs = internal_relocs
         self.unk_relocs = unk_relocs
 
+    def get_text_bytes(self) -> bytes:
+        return self.text.obj
+    
+    def get_data_bytes(self) -> bytes:
+        return self.data.obj
+
     @classmethod
     def from_reader(cls, reader: BinaryReader) -> "CRO":
         reader.seek(0x80) # Ignore hashes while reading
@@ -306,8 +317,8 @@ class CRO:
         OnLoad = SegmentOffset.from_reader(reader)
         OnExit = SegmentOffset.from_reader(reader)
         OnUnresolved = SegmentOffset.from_reader(reader)
-        text_info = CTRSectionInfo(reader.read_u32(), reader.read_u32(), CTRSectionType.TEXT)
-        data_info = CTRSectionInfo(reader.read_u32(), reader.read_u32(), CTRSectionType.DATA)
+        text_info = OffSize.from_reader(reader)
+        data_info = OffSize.from_reader(reader)
         module_name_info = OffSize.from_reader(reader)
         segment_table_info = OffSize.from_reader(reader)
         named_export_table_info = OffSize.from_reader(reader)
@@ -323,6 +334,14 @@ class CRO:
         unk_reloc_base_info = OffSize.from_reader(reader)
         internal_reloc_info = OffSize.from_reader(reader)
         unk_reloc_info = OffSize.from_reader(reader)
+
+        reader.seek(text_info.off)
+        text_bytes = reader.read_bytes(text_info.size)
+        text = OffObject(text_info.off, WritableBytes(text_bytes))
+
+        reader.seek(data_info.off)
+        data_bytes = reader.read_bytes(data_info.size)
+        data = OffObject(data_info.off, WritableBytes(data_bytes))
 
         reader.seek(module_name_info.off)
         module_name = OffObject(module_name_info.off,
@@ -405,7 +424,7 @@ class CRO:
             unk_relocs.obj.append(CRORelocationEntry.from_reader(reader))
 
         return cls(misc_info, cro_size, bss_size, misc_info_2,
-                 nnroCO, OnLoad, OnExit, OnUnresolved, text_info, data_info,
+                 nnroCO, OnLoad, OnExit, OnUnresolved, text, data,
                  module_name, segment_table, named_export_table, indexed_export_table,
                  export_strings, export_trie, import_module_table, import_relocations,
                  named_import_table, indexed_import_table, anon_import_table,
@@ -422,8 +441,8 @@ class CRO:
         self.OnLoad.write(writer)
         self.OnExit.write(writer)
         self.OnUnresolved.write(writer)
-        self.text_info.write(writer)
-        self.data_info.write(writer)
+        self.text.as_OffSize().write(writer)
+        self.data.as_OffSize().write(writer)
         self.module_name.as_OffSize().write(writer)
         self.segment_table.as_OffSize().write(writer)
         self.named_export_table.as_OffSize().write(writer)
@@ -440,6 +459,8 @@ class CRO:
         self.internal_relocs.as_OffSize().write(writer)
         self.unk_relocs.as_OffSize().write(writer)
 
+        self.text.write(writer)
+        self.data.write(writer)
         self.module_name.write(writer)
         self.segment_table.write(writer)
         self.named_export_table.write(writer)
@@ -457,10 +478,10 @@ class CRO:
         self.unk_relocs.write(writer)
 
         writer.seek(0)
-        for hash_bounds in [(0, self.text_info.off),
-                            (self.text_info.off, self.module_name.off),
-                            (self.module_name.off, self.data_info.off),
-                            (self.data_info.off, self.data_info.off + self.data_info.size)]:
+        for hash_bounds in [(0, self.text.off),
+                            (self.text.off, self.module_name.off),
+                            (self.module_name.off, self.data.off),
+                            (self.data.off, self.data.off + self.data.as_OffSize().size)]:
             bytes_to_hash = writer.stream[hash_bounds[0]:hash_bounds[1]]
             sha256 = hashlib.sha256(bytes_to_hash).digest()
             writer.write_bytes(sha256)

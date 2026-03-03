@@ -99,6 +99,11 @@ class WritableStr(str):
         writer.write_str(self)
 
 
+class WritableBytes(bytes):
+    def write(self, writer: BinaryWriter) -> None:
+        writer.write_bytes(self)
+
+
 class RelocationType(IntEnum):
     R_ARM_NONE = 0
     R_ARM_ABS32 = 2
