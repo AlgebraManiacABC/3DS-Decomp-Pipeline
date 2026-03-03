@@ -485,3 +485,25 @@ class CRO:
             bytes_to_hash = writer.stream[hash_bounds[0]:hash_bounds[1]]
             sha256 = hashlib.sha256(bytes_to_hash).digest()
             writer.write_bytes(sha256)
+
+
+class CTRBinary:
+    def __init__(self, binary: bytes | CRO):
+        self.binary = binary
+        # Ensure real bytes are kept
+        if isinstance(binary, CRO):
+            self.data = self.binary.get_text_bytes() + self.binary.get_data_bytes()
+            self.base_addr = 0
+        else:
+            self.data = self.binary
+            self.base_addr = 0x100000
+
+    @classmethod
+    def from_path(cls, path: Path) -> "CTRBinary":
+        if '.cro' in path.name:
+            reader = BinaryReader.from_path(path)
+            cro = CRO.from_reader(reader)
+            return cls(cro)
+        else:
+            code = path.read_bytes()
+            return cls(code)
