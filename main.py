@@ -27,7 +27,7 @@ def main(argv: list[str]) -> int:
     #  (must be exported by a split binary)
     undefined_symbols = []
 
-    binary_bytes = ctr_binary.binary
+    binary_bytes = ctr_binary.data
     for o_file in compiled_objects:
         o = ELF.from_path(o_file)
         if o.data == b'\x00':
@@ -80,10 +80,10 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == '__main__':
-    try:
-        sys.exit(main(sys.argv))
-    except Exception as e:
-        print(f"An issue occurred while running {sys.argv[0]}:")
-        print(e)
-        print("Program aborted.")
-        sys.exit(EXIT_FAILURE)
+    # try:
+    sys.exit(main(sys.argv))
+    # except Exception as e:
+    #     print(f"An issue occurred while running {sys.argv[0]}:")
+    #     print(e)
+    #     print("Program aborted.")
+    #     sys.exit(EXIT_FAILURE)

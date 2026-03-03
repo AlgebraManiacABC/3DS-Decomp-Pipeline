@@ -494,7 +494,7 @@ class CTRBinary:
         # Ensure real bytes are kept
         if isinstance(binary, CRO):
             self.data = self.binary.get_text_bytes() + self.binary.get_data_bytes()
-            self.base_addr = 0
+            self.base_addr = 0x180
         else:
             self.data = self.binary
             self.base_addr = 0x100000
