@@ -34,8 +34,6 @@ def gather_symbols(sym_file: str) -> list[Symbol]:
         except ValueError:
             pass
 
-    for sym in symbols:
-        sym.addr -= 0x100000
     return symbols
 
 
@@ -80,6 +78,10 @@ def gather_bearings(argv: list[str]):
     if not binary_file:
         raise Exception("Did not pick the binary to split!")
 
+    base_addr = 0x100000
+    if '.cro' in binary_file:
+        base_addr = 0
+
     if HAS_TKINTER and len(argv) < 5:
         symbol_file = filedialog.askopenfilename(
             filetypes=[("CSV Files",".csv"), ("All files", "*")],
@@ -90,6 +92,8 @@ def gather_bearings(argv: list[str]):
     if not symbol_file:
         raise Exception("Did not pick the symbol file!")
     symbols = gather_symbols(symbol_file)
+    for sym in symbols:
+        sym.addr -= base_addr
 
     if HAS_TKINTER and len(argv) < 5:
         split_dir = filedialog.askdirectory(
