@@ -1,8 +1,10 @@
 import csv
 from pathlib import Path
+import yaml
 
-from ctrtype import CTRBinary
-from util import Symbol
+from ctrtype import CTRBinary, CRO
+from util import Symbol, BinaryReader
+
 try:
     HAS_TKINTER = True
     from tkinter import filedialog
@@ -11,25 +13,36 @@ except ImportError:
     HAS_TKINTER = False
 
 
-def gather_compiled_object_files(dirname: str) -> list[Path]:
+def gather_binaries(path: Path) -> dict[str, CTRBinary]:
+    binaries = dict()
+    for f in path.rglob('*'):
+        if '.cro' in f:
+            cro = CRO.from_reader(BinaryReader.from_path(f))
+            binaries[f.name] = CTRBinary(f.name, cro)
+        if 'code' in f:
+            binaries[f.name] = CTRBinary(f.name, f.read_bytes())
+    return binaries
+
+
+def gather_compiled_object_files(path: Path) -> dict[str, list[Path]]:
     """
-    :param dirname: Name of the directory containing all user-compiled objects
-    :return: A list of Paths for all compiled objects
+    :param path: Directory path containing all user-compiled objects
+    :return: A dict of paths for all compiled objects ({module: o_files_list})
     """
-    objects = []
-    for o in Path(dirname).iterdir():
-        if o.suffix == '.o':
-            objects.append(o)
+    objects = dict()
+    for sub_dir in path.iterdir():
+        if sub_dir.is_dir():
+            objects[sub_dir.name] = list(sub_dir.rglob('*.o'))
     return objects
 
 
-def gather_symbols(sym_file: str) -> list[Symbol]:
+def gather_symbols(sym_path: Path) -> list[Symbol]:
     """
-    :param sym_file: Filename of exported symbol list (Ghidra style)
+    :param sym_path: Path of exported symbol list (Ghidra style)
     :return: List of symbols
     """
     symbols = []
-    reader = csv.DictReader(Path(sym_file).read_text().splitlines())
+    reader = csv.DictReader(sym_path.read_text().splitlines())
     for line in reader:
         try:
             symbols.append(Symbol(int(line["Location"], 16), line["Name"]))
@@ -39,15 +52,63 @@ def gather_symbols(sym_file: str) -> list[Symbol]:
     return symbols
 
 
-def gather_bearings(argv: list[str]):
+class CTRPipelineInfo:
+    def __init__(self, working_dir: Path, binaries: dict[str,CTRBinary],
+                 compiled_objects: dict[str, list[Path]],
+                 build_dir: Path, out_dir: Path, tool_dir: Path,
+                 symbols: dict[str, list[Symbol]],
+                 cc_info: dict[str, dict[str, dict]]):
+        self.working_dir = working_dir
+        self.binaries = binaries
+        self.compiled_objects = compiled_objects
+        self.build_dir = build_dir
+        self.out_dir = out_dir
+        self.tool_dir = tool_dir
+        self.symbols = symbols
+        self.cc_info = cc_info
+
+    @classmethod
+    def from_path(cls, working_dir: Path) -> "CTRPipelineInfo":
+        orig_dir = working_dir / 'orig'
+        build_dir = working_dir / 'build'
+        out_dir = working_dir / 'out'
+        tool_dir = working_dir / 'tools'
+        sym_dir = working_dir / 'symbols'
+        cc_info_path = working_dir / 'cc.yaml'
+        missing = []
+        if not orig_dir.exists():
+            missing.append('directory "orig"')
+        if not tool_dir.exists():
+            missing.append('directory "tools"')
+        if not sym_dir.exists():
+            missing.append('directory "symbols"')
+        if not cc_info_path.exists():
+            missing.append('compiler configuration "cc.yaml"')
+        if missing:
+            e = f"Pipeline incomplete for working dir {working_dir}!"
+            e += "".join(f"\nMissing {m}!" for m in missing)
+            raise Exception(e)
+        binaries = gather_binaries(orig_dir)
+        compiled_objects = gather_compiled_object_files(build_dir)
+        symbols: dict[str, list[Symbol]] = dict()
+        for f in sym_dir.iterdir():
+            sym_list = gather_symbols(f)
+            for sym in sym_list:
+                sym -= binaries[f.stem].base_addr
+            symbols[f.stem] = sym_list
+        cc_info = yaml.safe_load(cc_info_path.read_text())
+        return cls(working_dir, binaries, compiled_objects, build_dir, out_dir, tool_dir, symbols, cc_info)
+
+
+def gather_bearings(argv: list[str]) -> CTRPipelineInfo:
     """
     :return:
     """
 
-    if not HAS_TKINTER and len(argv) < 5:
+    if not HAS_TKINTER and len(argv) < 2:
         raise Exception(
             f"""
-            Usage: python {Path(argv[0]).name} <compiled_dir> <3ds_binary> <symbol_file> <split_output_dir>
+            Usage: python {Path(argv[0]).name} <dir>
             
             === OR ===
             (if tkinter installed)
@@ -56,53 +117,14 @@ def gather_bearings(argv: list[str]):
             """
         )
 
-    if HAS_TKINTER and len(argv) < 5:
-        compiled_dir = filedialog.askdirectory(
-            initialdir='.',
+    if HAS_TKINTER and len(argv) < 2:
+        working_dir = filedialog.askdirectory(
             mustexist=True,
-            title="User-compiled objects directory"
+            title="Choose working directory"
         )
     else:
-        compiled_dir = argv[1]
-    if not compiled_dir:
-        raise Exception("Did not pick a user-compiled object directory!")
-    compiled_objects = gather_compiled_object_files(compiled_dir)
-    if len(compiled_objects) == 0:
-        raise Exception(f"No object files found in {compiled_dir}!")
+        working_dir = argv[1]
+    if not working_dir:
+        raise Exception("Did not pick a working directory!")
 
-    if HAS_TKINTER and len(argv) < 5:
-        binary_file = filedialog.askopenfilename(
-            filetypes=[("3DS Executable Binary", ".cro code.bin .code"), ("All files", "*")],
-            title="Binary to Split"
-        )
-    else:
-        binary_file = argv[2]
-    if not binary_file:
-        raise Exception("Did not pick the binary to split!")
-
-    ctr_binary = CTRBinary.from_path(Path(binary_file))
-
-    if HAS_TKINTER and len(argv) < 5:
-        symbol_file = filedialog.askopenfilename(
-            filetypes=[("CSV Files",".csv"), ("All files", "*")],
-            title="Symbol file"
-        )
-    else:
-        symbol_file = argv[3]
-    if not symbol_file:
-        raise Exception("Did not pick the symbol file!")
-    symbols = gather_symbols(symbol_file)
-    for sym in symbols:
-        sym.addr -= ctr_binary.base_addr
-
-    if HAS_TKINTER and len(argv) < 5:
-        split_dir = filedialog.askdirectory(
-            mustexist=False,
-            title="Split object output directory"
-        )
-    else:
-        split_dir = argv[4]
-    if not split_dir:
-        raise Exception("Did not pick the output directory!")
-
-    return compiled_objects, ctr_binary, symbols, Path(split_dir)
+    return CTRPipelineInfo(Path(working_dir))

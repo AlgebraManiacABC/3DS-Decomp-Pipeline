@@ -236,7 +236,7 @@ class ELF:
         return cls.from_reader(BinaryReader.from_path(path))
 
     @classmethod
-    def from_bytes(cls, b: bytes, data_off: int, to_export: list[str], sym_list: list[Symbol], name: str) -> "ELF":
+    def from_bytes(cls, b: bytes, data_off: int, to_export: list[str], sym_list: list[Symbol]) -> "ELF":
         header = ELFHeader(0, 0, 0, True)
         mask = Bitmask(len(b))
         strtab_bytes = bytearray(b'\x00')
