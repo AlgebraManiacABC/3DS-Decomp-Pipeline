@@ -1,5 +1,5 @@
 from pathlib import Path
-from ELF import ELF
+from elf import ELF
 from ctrtype import CTRBinary
 from util import find_all_bytes, Symbol
 
