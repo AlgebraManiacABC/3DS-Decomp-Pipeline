@@ -47,7 +47,7 @@ def main(argv: list[str]) -> int:
             compiled.append(bld)
 
         # Split
-        objects = split(info.binaries[name], compiled, info.build_dir / name, info.symbols[name])
+        objects = split(info.binaries[name], compiled, info.build_dir / name, info.symbols.get(name,[]))
         objects.sort(key=lambda b: b[0])
 
         # Link
