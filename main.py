@@ -32,7 +32,7 @@ def main(argv: list[str]) -> int:
 
     for name in info.binaries.keys():
         # Compile
-        to_compile = info.sources[name]
+        to_compile = info.sources.get(name,[])
         compiled = []
         for c in to_compile:
             bld = info.build_dir / name / (c.stem + '.o')
