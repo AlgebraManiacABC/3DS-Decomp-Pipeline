@@ -21,6 +21,7 @@ def split(binary: CTRBinary, compiled_objects: list[Path], build_dir: Path, symb
     undefined_symbols = []
 
     binary_bytes = binary.data
+    all_found = []
     for o_file in compiled_objects:
         o = ELF.from_path(o_file)
         if o.data == b'\x00':
@@ -33,6 +34,7 @@ def split(binary: CTRBinary, compiled_objects: list[Path], build_dir: Path, symb
 
         print(f"Found {len(found)} {'matches' if len(found) > 1 else 'match'} for {o_file}!")
         for start_addr in found:
+            all_found.append((start_addr, o_file))
             end_addr = start_addr + len(o.data) - 1
             print(f"  -> {start_addr:#x} to {end_addr:#x}")
             address_matches.append((start_addr, end_addr))
@@ -52,7 +54,7 @@ def split(binary: CTRBinary, compiled_objects: list[Path], build_dir: Path, symb
         to_objectify.append((start_addr, len(binary_bytes)-1))
 
     # Create an object file for each interstice
-    split_objects = []
+    objects = all_found
     for start_end in to_objectify:
         base_name = f'{start_end[0] + binary.base_addr:08x}'
         o_file = build_dir / f'{base_name}.o'
@@ -65,11 +67,11 @@ def split(binary: CTRBinary, compiled_objects: list[Path], build_dir: Path, symb
         o = ELF.from_bytes(binary_bytes[start_end[0]:start_end[1]+1], start_end[0],
                            undefined_symbols, symbols_in_range)
         o.write(o_file)
-        split_objects.append(o_file)
+        objects.append((start_end[0],o_file))
 
     if undefined_symbols:
         print("Not all symbols could be defined! Remaining:")
         for sym in undefined_symbols:
             print(f"\t{sym}")
 
-    return split_objects
+    return objects

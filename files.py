@@ -53,12 +53,14 @@ def gather_symbols(sym_path: Path) -> list[Symbol]:
 
 
 class CTRPipelineInfo:
-    def __init__(self, working_dir: Path, binaries: dict[str,CTRBinary],
+    def __init__(self, working_dir: Path, originals: list[Path],
+                 binaries: dict[str,CTRBinary],
                  compiled_objects: dict[str, list[Path]],
                  build_dir: Path, out_dir: Path, tool_dir: Path,
                  symbols: dict[str, list[Symbol]],
                  cc_info: dict[str, dict[str, dict]]):
         self.working_dir = working_dir
+        self.originals = originals
         self.binaries = binaries
         self.compiled_objects = compiled_objects
         self.build_dir = build_dir
@@ -70,6 +72,7 @@ class CTRPipelineInfo:
     @classmethod
     def from_path(cls, working_dir: Path) -> "CTRPipelineInfo":
         orig_dir = working_dir / 'orig'
+        originals = orig_dir.rglob('*')
         build_dir = working_dir / 'build'
         out_dir = working_dir / 'out'
         tool_dir = working_dir / 'tools'
@@ -80,6 +83,11 @@ class CTRPipelineInfo:
             missing.append('directory "orig"')
         if not tool_dir.exists():
             missing.append('directory "tools"')
+        else:
+            if not (tool_dir / 'ld').exists():
+                missing.append('tool "ld"')
+            if not (tool_dir / 'objcopy').exists():
+                missing.append('tool "objcopy"')
         if not sym_dir.exists():
             missing.append('directory "symbols"')
         if not cc_info_path.exists():
@@ -97,7 +105,7 @@ class CTRPipelineInfo:
                 sym.addr -= binaries[f.stem].base_addr
             symbols[f.stem] = sym_list
         cc_info = yaml.safe_load(cc_info_path.read_text())
-        return cls(working_dir, binaries, compiled_objects, build_dir, out_dir, tool_dir, symbols, cc_info)
+        return cls(working_dir, originals, binaries, compiled_objects, build_dir, out_dir, tool_dir, symbols, cc_info)
 
 
 def gather_bearings(argv: list[str]) -> CTRPipelineInfo:

@@ -1,8 +1,11 @@
+import hashlib
 import sys
-from shutil import copy
+import subprocess
 
+from ctrtype import CRO
 from files import gather_bearings
 from split import split
+from util import BinaryWriter
 
 EXIT_SUCCESS=0
 EXIT_FAILURE=1
@@ -25,12 +28,50 @@ def main(argv: list[str]) -> int:
     print(f"Build directory: {info.build_dir}")
     print(f"Final output directory: {info.out_dir}")
 
-    built_binaries = dict()
-    for name, binary in info.binaries.items():
+    # TODO: Compile
+
+    for name in info.binaries.keys():
         # Split
-        created = split(binary, info.compiled_objects[name], info.build_dir / name, info.symbols[name])
-        created += info.compiled_objects[name]
-        built_binaries[name] = created
+        objects = split(info.binaries[name], info.compiled_objects[name], info.build_dir / name, info.symbols[name])
+        objects.sort(key=lambda b: b[0])
+
+        # Link
+        linked = info.out_dir / f'{name}_linked'
+        linked.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run([str(info.tool_dir / 'ld'), '--entry=0', '--no-warn-mismatch',
+                                 *[str(o) for _, o in objects], '-o', linked],
+                                capture_output=True, text=True)
+        if result.returncode != EXIT_SUCCESS:
+            raise Exception(f"Linker error!\nstdout: {result.stdout}\nstderr: {result.stderr}")
+
+        # Objcopy
+        final_binary = info.out_dir / name
+        if '.cro' in name:
+            final_binary = info.out_dir / f'{name}.temp'
+        result = subprocess.run([str(info.tool_dir / 'objcopy'), str(linked), '-O', 'binary', str(final_binary)],
+                                capture_output=True, text=True)
+        if result.returncode != EXIT_SUCCESS:
+            raise Exception(f"Objcopy error!\nstdout: {result.stdout}\nstderr: {result.stderr}")
+        linked.unlink()
+
+        # .cro modules need recreated
+        if '.cro' in name:
+            cro = CRO.from_cro(info.binaries[name].binary, final_binary.read_bytes())
+            final_cro = info.out_dir / name
+            writer = BinaryWriter()
+            cro.write(writer)
+            writer.flush(final_cro)
+            final_binary.unlink()
+            final_binary = final_cro
+
+        # Hash check - did we create an identical binary?
+        de_novo = hashlib.sha256(final_binary.read_bytes()).digest()
+        original_file = next(p for p in info.originals if p.name == name)
+        existing = hashlib.sha256(original_file.read_bytes()).digest()
+        if de_novo != existing:
+            raise Exception(f"Binary {name} was created, but does not match original!")
+
+        print(f"ROUND ROBIN DECOMP COMPLETE FOR {name.upper()}!!")
 
     return EXIT_SUCCESS
 

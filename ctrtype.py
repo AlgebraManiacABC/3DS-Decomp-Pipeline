@@ -1,5 +1,6 @@
 import hashlib
 from typing import TypeVar, Generic
+from typing_extensions import override
 
 from util import *
 
@@ -49,6 +50,8 @@ class OffObject(Generic[T]):
         writer.seek(ret)
 
     def get_size(self, elem_size: int):
+        if elem_size == 1 and self.obj and isinstance(self.obj[0], WritableStr):
+            return sum(len(s) + 1 for s in self.obj)
         return len(self.obj) * elem_size
 
     def as_OffSize(self, elem_size: int = 1) -> OffSize:
@@ -74,6 +77,12 @@ class CTRSectionInfo(OffSize):
         size = reader.read_u32()
         type = CTRSectionType(reader.read_u32())
         return cls(addr, size, type)
+
+    @override
+    def write(self, writer: BinaryWriter):
+        writer.write_u32(self.off)
+        writer.write_u32(self.size)
+        writer.write_u32(self.type.value)
 
 
 class ExHeader:
@@ -372,7 +381,7 @@ class CRO:
 
         reader.seek(export_trie_info.off)
         export_trie = OffObject(export_trie_info.off, [])
-        for i in range(int(export_trie_info.size / 0x8)):
+        for i in range(export_trie_info.size):
             export_trie.obj.append(ExportTrieEntry.from_reader(reader))
 
         reader.seek(import_module_table_info.off)
@@ -448,7 +457,7 @@ class CRO:
         self.named_export_table.as_OffSize().write(writer)
         self.indexed_export_table.as_OffSize().write(writer)
         self.export_strings.as_OffSize().write(writer)
-        self.export_trie.as_OffSize(EXPORT_TRIE_ENTRY_SIZE).write(writer)
+        self.export_trie.as_OffSize().write(writer)
         self.import_module_table.as_OffSize().write(writer)
         self.import_relocations.as_OffSize().write(writer)
         self.named_import_table.as_OffSize().write(writer)
@@ -477,14 +486,33 @@ class CRO:
         self.internal_relocs.write(writer)
         self.unk_relocs.write(writer)
 
+        cur_size = len(writer.getvalue())
+        padding = b'\xCC' * (self.cro_size - cur_size)
+        writer.seek(cur_size)
+        writer.write_bytes(padding)
+
         writer.seek(0)
-        for hash_bounds in [(0, self.text.off),
+        for hash_bounds in [(0x80, self.text.off),
                             (self.text.off, self.module_name.off),
                             (self.module_name.off, self.data.off),
                             (self.data.off, self.data.off + self.data.as_OffSize().size)]:
-            bytes_to_hash = writer.stream[hash_bounds[0]:hash_bounds[1]]
+            bytes_to_hash = writer.getvalue()[hash_bounds[0]:hash_bounds[1]]
             sha256 = hashlib.sha256(bytes_to_hash).digest()
             writer.write_bytes(sha256)
+
+    @classmethod
+    def from_cro(cls, cro: "CRO", data: bytes) -> "CRO":
+        data = bytearray(data)[:len(cro.text.obj)]
+        text_section = OffObject(cro.text.off, WritableBytes(data))
+        return cls(cro.misc_info, cro.cro_size, cro.bss_size, cro.misc_info_2,
+                   cro.nnroCO, cro.OnLoad, cro.OnExit, cro.OnUnresolved,
+                   text_section, cro.data, cro.module_name, cro.segment_table,
+                   cro.named_export_table, cro.indexed_export_table,
+                   cro.export_strings, cro.export_trie, cro.import_module_table,
+                   cro.import_relocations, cro.named_import_table,
+                   cro.indexed_import_table, cro.anon_import_table,
+                   cro.import_strings, cro.unk_reloc_base,
+                   cro.internal_relocs, cro.unk_relocs)
 
 
 class CTRBinary:
