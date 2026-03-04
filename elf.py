@@ -253,19 +253,23 @@ class ELF:
             # match with sym_list
             addr = -1
             mode = None
+            size = 0
             for s in sym_list:
                 if sym == s.name:
                     addr = s.addr
                     mode = s.mode
+                    size = s.size
                     break
             if addr < 0:
                 continue
+            if addr < data_off or addr >= data_off + len(b):
+                continue
             # NOTE: st_other == 0x2 ("hidden"); decomp.me creates hidden exports by default
             local_syms.append(SymbolTableEntry(len(local_strtab),
-                addr, 0, 0x0, 0x0, 1))
+                addr - data_off, 0, 0x0, 0x0, 1))
             local_strtab += mode.encode('utf-8') + b'\x00'
             global_syms.append(SymbolTableEntry(len(global_strtab),
-                addr, len(sym) + 1, 0x12, 0x2, 1))
+                addr - data_off, size, 0x12, 0x2, 1))
             global_strtab += sym.encode('utf-8') + b'\x00'
             to_export.remove(sym)
         for g_sym in global_syms:

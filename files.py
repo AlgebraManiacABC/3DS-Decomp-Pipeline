@@ -44,7 +44,7 @@ def gather_symbols(sym_path: Path) -> list[Symbol]:
     reader = csv.DictReader(sym_path.read_text().splitlines())
     for line in reader:
         try:
-            symbols.append(Symbol(int(line["Location"], 16), line["Name"], line["Mode"]))
+            symbols.append(Symbol(int(line["Location"], 16), line["Name"], line["Mode"], int(line["Size"], 16)))
         except ValueError:
             pass
 

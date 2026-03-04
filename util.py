@@ -6,10 +6,11 @@ from typing import Protocol
 
 
 class Symbol:
-    def __init__(self, addr: int, name: str, mode: str):
+    def __init__(self, addr: int, name: str, mode: str, size: int):
         self.addr = addr
         self.name = name
         self.mode = mode
+        self.size = size
 
 
 class BinaryReader:
