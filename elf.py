@@ -143,26 +143,29 @@ class SectionHeaderType(IntEnum):
 
 class ELF:
     def __init__(self, header: ELFHeader, data: bytes, data_off: int, mask: Bitmask,
-                 imported: list[str], strtab_bytes: bytes, symtab_entries: list[SymbolTableEntry]):
+                 imported: list[str], strtab_bytes: bytes,
+                 local_syms: list[SymbolTableEntry], global_syms: list[SymbolTableEntry]):
         self.header = header
         self.data = data
         self.data_off = data_off
         self.mask = mask
         self.imported_symbols = imported
         self.strtab_bytes = strtab_bytes
-        self.symtab_entries = symtab_entries
+        self.local_syms = local_syms
+        self.global_syms = global_syms
         return
 
     @classmethod
     def from_reader(cls, reader: BinaryReader) -> "ELF":
         header = ELFHeader.from_reader(reader)
         if not header.valid:
-            return cls(header, b'\x00', 0, Bitmask(0), [], b'\x00', [])
+            return cls(header, b'\x00', 0, Bitmask(0), [], b'\x00', [], [])
         sh_entries = []
         text_data = []
         data_off = 0
         text_name_offsets = []
-        symtab_entries = []
+        local_syms = []
+        global_syms = []
         strtab_index = 0
         rel_indices = []
         for i in range(header.shnum):
@@ -184,7 +187,10 @@ class ELF:
                     num_symbols = int(sh_entry.size / 0x10)
                     for j in range(num_symbols):
                         sym = SymbolTableEntry.from_reader(reader)
-                        symtab_entries.append(sym)
+                        if j >= sh_entry.info:
+                            global_syms.append(sym)
+                        else:
+                            local_syms.append(sym)
                 case 9:
                     # .rel.xyz (e.g., .rel.debug, .rel.text)
                     rel_indices.append(i)
@@ -222,14 +228,14 @@ class ELF:
                 num_relocs = int(sh_rel.size / sh_rel.entsize)
                 for j in range(num_relocs):
                     rel_entry = RelocationEntry.from_reader(reader)
-                    sym = symtab_entries[rel_entry.symbol_index]
+                    sym = (local_syms + global_syms)[rel_entry.symbol_index]
                     # strings should NOT be None here
                     rel_name = get_name(strings, sym.name_off)
                     print(f"Name to relocate: {rel_name}")
                     undefined_symbols.append(rel_name)
                     mask.add_relocation(rel_entry)
 
-        return cls(header, bin_bytes, data_off, mask, undefined_symbols, strings, symtab_entries)
+        return cls(header, bin_bytes, data_off, mask, undefined_symbols, strings, local_syms, global_syms)
 
     @classmethod
     def from_path(cls, path: Path) -> "ELF":
@@ -239,23 +245,33 @@ class ELF:
     def from_bytes(cls, b: bytes, data_off: int, to_export: list[str], sym_list: list[Symbol]) -> "ELF":
         header = ELFHeader(0, 0, 0, True)
         mask = Bitmask(len(b))
-        strtab_bytes = bytearray(b'\x00')
-        symtab_entries = []
+        local_strtab = bytearray(b'\x00')
+        global_strtab = bytearray()
+        local_syms = []
+        global_syms: list[SymbolTableEntry] = []
         for sym in to_export.copy():
             # match with sym_list
             addr = -1
+            mode = None
             for s in sym_list:
                 if sym == s.name:
                     addr = s.addr
+                    mode = s.mode
                     break
             if addr < 0:
                 continue
             # NOTE: st_other == 0x2 ("hidden"); decomp.me creates hidden exports by default
-            symtab_entries.append(SymbolTableEntry(len(strtab_bytes),
+            local_syms.append(SymbolTableEntry(len(local_strtab),
+                addr, 0, 0x0, 0x0, 1))
+            local_strtab += mode.encode('utf-8') + b'\x00'
+            global_syms.append(SymbolTableEntry(len(global_strtab),
                 addr, len(sym) + 1, 0x12, 0x2, 1))
-            strtab_bytes += sym.encode('utf-8') + b'\x00'
+            global_strtab += sym.encode('utf-8') + b'\x00'
             to_export.remove(sym)
-        elf = cls(header, b, data_off, mask, [], strtab_bytes, symtab_entries)
+        for g_sym in global_syms:
+            g_sym.name_off += len(local_strtab)
+        strtab_bytes = local_strtab + global_strtab
+        elf = cls(header, b, data_off, mask, [], strtab_bytes, local_syms, global_syms)
         return elf
 
     def write(self, o_file: Path):
@@ -267,7 +283,9 @@ class ELF:
         # .symtab
         symtab_off = writer.tell()
         writer.write_bytes(b'\x00' * 0x10) # 0th entry is null
-        for st_entry in self.symtab_entries:
+        for st_entry in self.local_syms:
+            st_entry.write(writer)
+        for st_entry in self.global_syms:
             st_entry.write(writer)
         # .strtab
         strtab_off = writer.tell()
@@ -278,10 +296,10 @@ class ELF:
         text_name_off = writer.tell() - shstrtab_off
         writer.write_str('.text')
         symtab_name_off = writer.tell() - shstrtab_off
-        if self.symtab_entries:
+        if self.global_syms or self.local_syms:
             writer.write_str('.symtab')
         strtab_name_off = writer.tell() - shstrtab_off
-        if self.symtab_entries:
+        if self.global_syms or self.local_syms:
             writer.write_str('.strtab')
         shstrtab_name_off = writer.tell() - shstrtab_off
         writer.write_str('.shstrtab')
@@ -295,9 +313,9 @@ class ELF:
                            0, 0, 0, 0, 0).write(writer)
         SectionHeaderEntry(text_name_off, SectionHeaderType.SHT_PROGBITS, 0x6, self.data_off, text_off,
                            symtab_off - text_off, 0, 0, 0).write(writer)
-        if self.symtab_entries:
+        if self.global_syms or self.local_syms:
             SectionHeaderEntry(symtab_name_off, SectionHeaderType.SHT_SYMTAB, 0, 0, symtab_off,
-                           strtab_off - symtab_off, 3, 1, 0x10).write(writer)
+                           strtab_off - symtab_off, 3, len(self.local_syms) + 1, 0x10).write(writer)
             SectionHeaderEntry(strtab_name_off, SectionHeaderType.SHT_STRTAB, 0, 0, strtab_off,
                            len(self.strtab_bytes), 0, 0, 0).write(writer)
         SectionHeaderEntry(shstrtab_name_off, SectionHeaderType.SHT_STRTAB, 0, 0, shstrtab_off,
@@ -307,7 +325,7 @@ class ELF:
         writer.seek(0x20)
         writer.write_u32(sh_off)
         writer.seek(0x30)
-        writer.write_u16(5 if self.symtab_entries else 3) # shnum
-        writer.write_u16(4 if self.symtab_entries else 2) # shstrndx
+        writer.write_u16(5 if self.global_syms or self.local_syms else 3) # shnum
+        writer.write_u16(4 if self.global_syms or self.local_syms else 2) # shstrndx
 
         writer.flush(o_file)

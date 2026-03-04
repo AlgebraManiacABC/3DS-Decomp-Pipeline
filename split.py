@@ -62,7 +62,7 @@ def split(binary: CTRBinary, compiled_objects: list[Path], build_dir: Path, symb
         while o_file.exists():
             o_file = build_dir / f'{base_name}_{counter}.o'
             counter += 1
-        symbols_in_range = [Symbol(sym.addr - start_end[0], sym.name)
+        symbols_in_range = [Symbol(sym.addr - start_end[0], sym.name, sym.mode)
                      for sym in symbols if start_end[0] <= sym.addr <= start_end[1]]
         o = ELF.from_bytes(binary_bytes[start_end[0]:start_end[1]+1], start_end[0],
                            undefined_symbols, symbols_in_range)
