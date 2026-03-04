@@ -1,7 +1,6 @@
 import csv
 from pathlib import Path
 import yaml
-
 from ctrtype import CTRBinary, CRO
 from util import Symbol, BinaryReader
 
@@ -52,17 +51,26 @@ def gather_symbols(sym_path: Path) -> list[Symbol]:
     return symbols
 
 
+def gather_sources(src_path: Path) -> dict[str,list[Path]]:
+    objects = dict()
+    for sub_dir in src_path.iterdir():
+        if sub_dir.is_dir():
+            objects[sub_dir.name] = list(sub_dir.rglob('*.c*'))
+    return objects
+
+
+
 class CTRPipelineInfo:
     def __init__(self, working_dir: Path, originals: list[Path],
                  binaries: dict[str,CTRBinary],
-                 compiled_objects: dict[str, list[Path]],
+                 sources: dict[str, list[Path]],
                  build_dir: Path, out_dir: Path, tool_dir: Path,
                  symbols: dict[str, list[Symbol]],
                  cc_info: dict[str, dict[str, dict]]):
         self.working_dir = working_dir
         self.originals = originals
         self.binaries = binaries
-        self.compiled_objects = compiled_objects
+        self.sources = sources
         self.build_dir = build_dir
         self.out_dir = out_dir
         self.tool_dir = tool_dir
@@ -72,7 +80,8 @@ class CTRPipelineInfo:
     @classmethod
     def from_path(cls, working_dir: Path) -> "CTRPipelineInfo":
         orig_dir = working_dir / 'orig'
-        originals = orig_dir.rglob('*')
+        originals = list(orig_dir.rglob('*'))
+        source_dir = working_dir / 'src'
         build_dir = working_dir / 'build'
         out_dir = working_dir / 'out'
         tool_dir = working_dir / 'tools'
@@ -97,7 +106,7 @@ class CTRPipelineInfo:
             e += "".join(f"\nMissing {m}!" for m in missing)
             raise Exception(e)
         binaries = gather_binaries(orig_dir)
-        compiled_objects = gather_compiled_object_files(build_dir)
+        sources = gather_sources(source_dir)
         symbols: dict[str, list[Symbol]] = dict()
         for f in sym_dir.iterdir():
             sym_list = gather_symbols(f)
@@ -105,7 +114,7 @@ class CTRPipelineInfo:
                 sym.addr -= binaries[f.stem].base_addr
             symbols[f.stem] = sym_list
         cc_info = yaml.safe_load(cc_info_path.read_text())
-        return cls(working_dir, originals, binaries, compiled_objects, build_dir, out_dir, tool_dir, symbols, cc_info)
+        return cls(working_dir, originals, binaries, sources, build_dir, out_dir, tool_dir, symbols, cc_info)
 
 
 def gather_bearings(argv: list[str]) -> CTRPipelineInfo:

@@ -18,7 +18,7 @@ def main(argv: list[str]) -> int:
     """
 
     info = gather_bearings(argv)
-    print(f"Compiled object count: {len(info.compiled_objects)}")
+    print(f"Source file count: {len(info.sources)}")
     print(f"Binaries to split:")
     for binary in info.binaries:
         print(f"\t{binary}")
@@ -31,8 +31,23 @@ def main(argv: list[str]) -> int:
     # TODO: Compile
 
     for name in info.binaries.keys():
+        # Compile
+        to_compile = info.sources[name]
+        compiled = []
+        for c in to_compile:
+            bld = info.build_dir / name / (c.stem + '.o')
+            bld.parent.mkdir(parents=True, exist_ok=True)
+            d = info.cc_info[name][c.name]
+            cc = d['cc']
+            flags = d['flags']
+            result = subprocess.run([str(info.tool_dir / cc), *flags, c, '-c', '-o', bld],
+                                    capture_output=True, text=True)
+            if result.returncode != EXIT_SUCCESS:
+                raise Exception(f"Compiler error!\nstdout: {result.stdout}\nstderr: {result.stderr}")
+            compiled.append(bld)
+
         # Split
-        objects = split(info.binaries[name], info.compiled_objects[name], info.build_dir / name, info.symbols[name])
+        objects = split(info.binaries[name], compiled, info.build_dir / name, info.symbols[name])
         objects.sort(key=lambda b: b[0])
 
         # Link
