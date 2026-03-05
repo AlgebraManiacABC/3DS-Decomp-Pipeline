@@ -37,7 +37,10 @@ def main(argv: list[str]) -> int:
         to_compile = info.sources.get(name,[])
         compiled = []
         default = info.cc_info.get('default', None)
+        ignore_list = info.cc_info.get(name,{}).get('ignored', [])
         for c in to_compile:
+            if c.name in ignore_list:
+                continue
             bld = info.build_dir / name / (c.stem + '.o')
             bld.parent.mkdir(parents=True, exist_ok=True)
             d = info.cc_info[name].get(c.name, None)
