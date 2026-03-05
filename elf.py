@@ -257,7 +257,7 @@ class ELF:
                 sym.addr - data_off, 0, 0x0, 0x0, 1))
             local_strtab += sym.mode.encode('utf-8') + b'\x00'
             global_syms.append(SymbolTableEntry(len(global_strtab),
-                sym.addr - data_off, sym.size, 0x12, 0x2, 1))
+                sym.addr - data_off, sym.size, 0x12, 0, 1))
             global_strtab += sym.name.encode('utf-8') + b'\x00'
         for g_sym in global_syms:
             g_sym.name_off += len(local_strtab)
