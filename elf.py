@@ -302,7 +302,7 @@ class ELF:
         sh_off = writer.tell()
         SectionHeaderEntry(0, 0, 0, 0, 0,
                            0, 0, 0, 0, 0).write(writer)
-        SectionHeaderEntry(text_name_off, SectionHeaderType.SHT_PROGBITS, 0x6, self.data_off, text_off,
+        SectionHeaderEntry(text_name_off, SectionHeaderType.SHT_PROGBITS, 0x6, 0, text_off,
                            symtab_off - text_off, 0, 0, 0).write(writer)
         if self.global_syms or self.local_syms:
             SectionHeaderEntry(symtab_name_off, SectionHeaderType.SHT_SYMTAB, 0, 0, symtab_off,
