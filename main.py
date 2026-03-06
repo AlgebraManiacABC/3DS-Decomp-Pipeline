@@ -51,7 +51,7 @@ def main(argv: list[str]) -> int:
             flags = d['flags']
             cmd = [str(info.tool_dir / cc), *flags, str(c), '-c', '-o', str(bld)]
             print(" ".join(cmd))
-            result = subprocess.run(cmd, capture_output=(not info.ignore_compiler_errors), text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != EXIT_SUCCESS:
                 if info.ignore_compiler_errors:
                     print(f"Error compiling {c}! Skipping!")
