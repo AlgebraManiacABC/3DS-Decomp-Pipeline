@@ -13,6 +13,7 @@ def generate_objdiff_unit(name: str, working_dir: Path, compiled: list[Path], ta
     for t_addr, t_path in sorted(target_dict.items()):
         base_path = compiled_dict.get(t_path.stem, None)
         if base_path:
+            compiled_dict.pop(t_path.stem)
             to_link.append(base_path)
         else:
             to_link.append(t_path)
@@ -25,6 +26,8 @@ def generate_objdiff_unit(name: str, working_dir: Path, compiled: list[Path], ta
                 "complete": False if base_path is None else None
             }
         })
+    for base_path in compiled_dict.values():
+        print(f"Mismatching filename not found in target: {base_path}")
     return objdiff_units, to_link
 
 

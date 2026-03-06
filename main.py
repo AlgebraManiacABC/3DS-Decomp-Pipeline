@@ -1,4 +1,5 @@
 import hashlib
+import subprocess
 import sys
 import json
 from files import gather_bearings
@@ -37,6 +38,7 @@ def main(argv: list[str]) -> int:
         compiled = []
         default = info.cc_info.get('default', None)
         ignore_list = info.cc_info.get(name,{}).get('ignored', [])
+        errored = []
         for c in to_compile:
             if c.name in ignore_list:
                 continue
@@ -48,11 +50,24 @@ def main(argv: list[str]) -> int:
             cc = d['cc']
             flags = d['flags']
             cmd = [str(info.tool_dir / cc), *flags, str(c), '-c', '-o', str(bld)]
-            subp_run(cmd, True, "Compiler error!")
+            print(" ".join(cmd))
+            result = subprocess.run(cmd, capture_output=(not info.ignore_compiler_errors), text=True)
+            if result.returncode != EXIT_SUCCESS:
+                if info.ignore_compiler_errors:
+                    print(f"Error compiling {c}! Skipping!")
+                    errored.append(c)
+                    continue
+                else:
+                    raise Exception(f"Compiler error!\nstdout:\n{result.stdout}\n\nstderr:\n{result.stderr}")
             # Since armcc doesn't globalize the symbol (and we might need it for linking), globalize with objcopy
             cmd = [objcopy, f'--globalize-symbol={c.name}', str(bld)]
             subp_run(cmd, False, f"Objcopy error on {c}!")
             compiled.append(bld)
+
+        if errored:
+            print(f"Error compiling {len(errored)} functions!! First 10:")
+            for e in errored[0:10]:
+                print(e)
 
         if info.compile_only:
             print(f"COMPILATION OF {name.upper()} COMPLETE!")
