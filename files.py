@@ -1,5 +1,6 @@
 import csv
 from pathlib import Path
+import argparse
 import yaml
 from ctrtype import CTRBinary, CRO
 from util import Symbol, BinaryReader
@@ -133,46 +134,46 @@ def gather_bearings(argv: list[str]) -> CTRPipelineInfo:
     :return:
     """
 
-    if not HAS_TKINTER and len(argv) < 2:
-        raise Exception(
-            f"""
-            Usage: python {Path(argv[0]).name} <dir>
-            
-                --recreateBinaries=[True/False]          If the program should attempt to link (key work being attempt)
-            
-            === OR ===
-            (if tkinter installed)
-            
-            Usage: python {Path(argv[0]).name}
-            """
-        )
+    parser = argparse.ArgumentParser(
+        prog="3DS-Decomp-Pipeline",
+        description="CTR decompilation pipeline tool"
+    )
+    parser.add_argument(
+        "dir",
+        nargs="?",
+        help="Working directory"
+    )
+    parser.add_argument(
+        "--recreate-binaries",
+        action="store_true",
+        default=False,
+        help="Attempt to link objects and recreate original binaries"
+    )
+    parser.add_argument(
+        "--compile-only",
+        action="store_true",
+        default=False,
+        help="Only compile, do not link"
+    )
 
-    if HAS_TKINTER and len(argv) < 2:
-        working_dir = filedialog.askdirectory(
-            mustexist=True,
-            title="Choose working directory"
-        )
-        if working_dir:
-            recreating_binaries = messagebox.askyesno("Recreate originals?",
-                    "Should this program attempt to link the created"
-                            "objects and recreate the original binaries?")
+    args = parser.parse_args(argv[1:])
+
+    working_dir = args.dir
+    if not working_dir:
+        if HAS_TKINTER:
+            working_dir = filedialog.askdirectory(mustexist=True, title="Choose working directory")
+            recreating_binaries = messagebox.askyesno(
+                "Recreate originals?",
+                "Should this program attempt to link the created objects and recreate the original binaries?"
+            )
+            compile_only = False
+        else:
+            parser.error("Working directory required when tkinter is not available.")
     else:
-        working_dir = argv[1]
-        recreating_binaries = False
-        compile_only = False
-        if len(argv) == 3:
-            test_rb = argv[2].startswith('--recreateBinaries')
-            test_co = argv[2].startswith('--compileOnly')
-            if test_rb:
-                recreating_binaries = argv[2] == '--recreateBinaries=True'
-            if test_co:
-                compile_only = argv[2] == '--compileOnly=True'
-        elif len(argv) == 4:
-            test_rb = argv[2] if argv[2].startswith('--recreatingBinaries') else argv[3]
-            test_co = argv[2] if argv[2].startswith('compileOnly') else argv[3]
-            recreating_binaries = test_rb == '--recreateBinaries=True'
-            compile_only = test_co == '--compileOnly=True'
+        recreating_binaries = args.recreate_binaries
+        compile_only = args.compile_only
+
     if not working_dir:
         raise Exception("Did not pick a working directory!")
 
-    return CTRPipelineInfo.from_path(Path(working_dir), recreating_binaries, compile_only)
+    return CTRPipelineInfo.from_path(Path(args.dir), recreating_binaries, compile_only)
