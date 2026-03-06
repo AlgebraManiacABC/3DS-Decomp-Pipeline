@@ -1,9 +1,60 @@
 from pathlib import Path
+
+from typing_extensions import deprecated
+
 from elf import ELF
 from ctrtype import CTRBinary
-from util import find_all_bytes, Symbol
+from util import find_all_bytes, Symbol, sanitize
 
 
+def split_by_symbols(binary: CTRBinary, split_dir: Path, symbols: list[Symbol]):
+    """
+    Creates object files for all symbols in the list,
+     using the provided binary.
+    :param binary: The binary to split
+    :param split_dir: The output directory for the new objects
+    :param symbols: The list of symbols by which to split the binary
+    :return: A list of new objects as (address_in_binary, path)
+    """
+
+    bin_data = binary.data
+    symbol_dict = {sym.addr: sym for sym in symbols}
+    addrs = [sym.addr for sym in symbols]
+    addrs.sort(reverse=True)
+    addrs_to_log = set(addrs[i] for i in range(0, len(addrs), 100))
+    splat = []
+    cur_addr = 0
+    while cur_addr < len(bin_data):
+        if cur_addr in addrs_to_log:
+            print(f"[SPLIT PROGRESS] {100 * cur_addr / len(bin_data):.2f}%")
+        next_addr = addrs[-1] if addrs else len(bin_data)
+        while cur_addr > next_addr:
+            # print(f"Symbol at {next_addr} was overlapped by a preceding symbol! Ignoring")
+            addrs.pop()
+            next_addr = addrs[-1] if addrs else len(bin_data)
+        if cur_addr == next_addr:
+            addrs.pop()
+            sym = symbol_dict[cur_addr]
+            sym.name = sym.name.replace('::', '__')
+            symbol_bytes = bin_data[sym.addr:sym.addr + sym.size]
+            cur_addr += sym.size
+        else:
+            symbol_bytes = bin_data[cur_addr:next_addr]
+            name = f'{cur_addr:08x}'
+            sym = Symbol(cur_addr, name, '$d', next_addr - cur_addr)
+            cur_addr = next_addr
+
+        o = ELF.from_bytes_single(symbol_bytes, sym)
+        o_file = split_dir / f'{sanitize(sym.name)}.o'
+        o.write(o_file)
+        splat.append((sym.addr, o_file))
+
+    print("[SPLIT PROGRESS] 100.00%")
+    return splat
+
+
+
+@deprecated("Use split_by_symbols instead")
 def split(binary: CTRBinary, compiled_objects: list[Path], build_dir: Path, symbols: list[Symbol]):
     """
     Creates object files in the space between compiled objects for the given binary.
@@ -12,7 +63,7 @@ def split(binary: CTRBinary, compiled_objects: list[Path], build_dir: Path, symb
     :param compiled_objects: A list of objects already compiled, with which to split the binary
     :param build_dir: The build (sub)directory to write created object files
     :param symbols: A symbol list for proper linking of objects later
-    :return: The list of new objects
+    :return:
     """
     # Locations of matching binaries within the main binary
     address_matches = []
@@ -56,7 +107,7 @@ def split(binary: CTRBinary, compiled_objects: list[Path], build_dir: Path, symb
         o_file = build_dir / f'{base_name}.o'
         symbols_in_range = [Symbol(sym.addr - start_end[0], sym.name, sym.mode, sym.size)
                      for sym in symbols if start_end[0] <= sym.addr < start_end[1]]
-        o = ELF.from_bytes(binary_bytes[start_end[0]:start_end[1]+1], start_end[0],
+        o = ELF.from_bytes_multi(binary_bytes[start_end[0]:start_end[1]+1], start_end[0],
                            symbols_in_range)
         o_file.parent.mkdir(parents=True, exist_ok=True)
         o.write(o_file)

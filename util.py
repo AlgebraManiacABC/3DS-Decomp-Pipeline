@@ -1,8 +1,22 @@
+import re
 import struct
+import subprocess
 from enum import IntEnum
 from io import BytesIO
 from pathlib import Path
 from typing import Protocol
+
+
+EXIT_SUCCESS=0
+EXIT_FAILURE=1
+
+
+def subp_run(cmd: list[str], print_cmd: bool, on_fail: str = "Error!") -> None:
+    if print_cmd:
+        print(" ".join(cmd))
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != EXIT_SUCCESS:
+        raise Exception(f"{on_fail}\nstdout:\n{result.stdout}\n\nstderr:\n{result.stderr}")
 
 
 class Symbol:
@@ -173,3 +187,7 @@ def find_all_bytes(data: bytes, pattern: bytes, mask: Bitmask):
             found.append(start)
             start += 1
     return found
+
+
+def sanitize(name: str) -> str:
+    return re.sub(r'[<>:"/\\|?*]', '_', name)

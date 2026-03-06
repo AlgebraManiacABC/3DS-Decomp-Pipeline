@@ -242,7 +242,7 @@ class ELF:
         return cls.from_reader(BinaryReader.from_path(path))
 
     @classmethod
-    def from_bytes(cls, b: bytes, data_off: int, sym_list: list[Symbol]) -> "ELF":
+    def from_bytes_multi(cls, b: bytes, data_off: int, sym_list: list[Symbol]) -> "ELF":
         header = ELFHeader(0, 0, 0, True)
         mask = Bitmask(len(b))
         local_strtab = bytearray(b'\x00')
@@ -261,8 +261,21 @@ class ELF:
         for g_sym in global_syms:
             g_sym.name_off += len(local_strtab)
         strtab_bytes = local_strtab + global_strtab
-        elf = cls(header, b, data_off, mask, [], strtab_bytes, local_syms, global_syms)
-        return elf
+        return cls(header, b, data_off, mask, [], strtab_bytes, local_syms, global_syms)
+
+    @classmethod
+    def from_bytes_single(cls, b: bytes, symbol: Symbol) -> "ELF":
+        header = ELFHeader(0, 0, 0, True)
+        local_strtab = bytearray(b'\x00')
+        global_strtab = bytearray()
+        local_syms = [SymbolTableEntry(len(local_strtab),
+                0, 0, 0x0, 0x0, 1)]
+        local_strtab += symbol.mode.encode('utf-8') + b'\x00'
+        global_syms: list[SymbolTableEntry] = [SymbolTableEntry(len(global_strtab) + len(local_strtab),
+                0, symbol.size, 0x12, 0, 1)]
+        global_strtab += symbol.name.encode('utf-8') + b'\x00'
+        strtab_bytes = local_strtab + global_strtab
+        return cls(header, b, symbol.addr, Bitmask(len(b)), [], strtab_bytes, local_syms, global_syms)
 
     def write(self, o_file: Path):
         writer = BinaryWriter()
