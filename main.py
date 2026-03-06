@@ -65,7 +65,7 @@ def main(argv: list[str]) -> int:
 
         if info.recreating_binaries:
             # Link
-            linked = link_by_seriatum(name, to_link, info.out_dir, ld)
+            linked = link_by_seriatum(name, to_link, info.out_dir, ld, False)
 
             # Objcopy
             final_binary = recreate_binary(name, info.out_dir, objcopy, linked, info.binaries[name])

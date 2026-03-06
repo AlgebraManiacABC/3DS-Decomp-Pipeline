@@ -28,7 +28,7 @@ def generate_objdiff_unit(name: str, working_dir: Path, compiled: list[Path], ta
     return objdiff_units, to_link
 
 
-def link_by_seriatum(name: str, to_link: list[Path], out_dir: Path, ld: str) -> Path:
+def link_by_seriatum(name: str, to_link: list[Path], out_dir: Path, ld: str, verbose: bool) -> Path:
     # Link (in groups of files, so we can see progress)
     link_by = 100
     response_file = out_dir / f'{name}.txt'
@@ -39,7 +39,7 @@ def link_by_seriatum(name: str, to_link: list[Path], out_dir: Path, ld: str) -> 
         response_file.write_text('\n'.join('"' + str(o).replace('\\', '/') + '"' for o in to_link[bounds[0]:bounds[1]]))
         cmd = [ld, '--entry=0', '--no-warn-mismatch', '-r', f'@{response_file}', '-o', str(linked)]
         print(f"[LINKER PROGRESS] {link_by * i / len(link_bounds):.1f}%")
-        subp_run(cmd, True, "Linker error!")
+        subp_run(cmd, verbose, "Linker error!")
         temp_links.append(linked)
 
     linked = out_dir / f'{name}_linked'
@@ -71,7 +71,7 @@ def recreate_binary(name: str, out_dir: Path, objcopy: str, linked: Path, in_bin
     final_binary = out_dir / name
     if '.cro' in name:
         final_binary = out_dir / f'{name}.temp'
-    cmd = [objcopy, str(linked), '-O', 'binary', final_binary]
+    cmd = [objcopy, str(linked), '-O', 'binary', str(final_binary)]
     subp_run(cmd, True, "Objcopy error!")
 
     # .cro modules need recreated
