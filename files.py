@@ -163,7 +163,7 @@ def gather_bearings(argv: list[str]) -> CTRPipelineInfo:
     )
     parser.add_argument(
         "--progress-reports",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="Whether to report [PROGRESS] __._% during compiling, splitting, and linking"
     )
@@ -186,4 +186,6 @@ def gather_bearings(argv: list[str]) -> CTRPipelineInfo:
     if not working_dir:
         raise Exception("Did not pick a working directory!")
 
-    return CTRPipelineInfo.from_path(Path(args.dir), recreating_binaries, args)
+    args = vars(args)
+
+    return CTRPipelineInfo.from_path(Path(args['dir']), recreating_binaries, args)

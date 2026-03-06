@@ -31,7 +31,7 @@ def generate_objdiff_unit(name: str, working_dir: Path, compiled: list[Path], ta
     return objdiff_units, to_link
 
 
-def link_by_seriatum(name: str, to_link: list[Path], out_dir: Path, ld: str, verbose: bool) -> Path:
+def link_by_seriatum(name: str, to_link: list[Path], out_dir: Path, ld: str, verbose: bool, info) -> Path:
     # Link (in groups of files, so we can see progress)
     link_by = 100
     response_file = out_dir / f'{name}.txt'
@@ -41,12 +41,14 @@ def link_by_seriatum(name: str, to_link: list[Path], out_dir: Path, ld: str, ver
         linked = out_dir / f'{name}_linked_{bounds[0]}'
         response_file.write_text('\n'.join('"' + str(o).replace('\\', '/') + '"' for o in to_link[bounds[0]:bounds[1]]))
         cmd = [ld, '--entry=0', '--no-warn-mismatch', '-r', f'@{response_file}', '-o', str(linked)]
-        print(f"[LINKER PROGRESS] {link_by * i / len(link_bounds):.1f}%")
+        if info.args['progress_reports']:
+            print(f"[LINKER PROGRESS] {link_by * i / len(link_bounds):.1f}%")
         subp_run(cmd, verbose, "Linker error!")
         temp_links.append(linked)
 
     linked = out_dir / f'{name}_linked'
-    print("[LINKER PROGRESS] Performing final link...")
+    if info.args['progress_reports']:
+        print("[LINKER PROGRESS] Performing final link...")
     response_file.write_text('\n'.join(str(o).replace('\\', '/') for o in temp_links))
     cmd = [ld, '--entry=0', '--no-warn-mismatch',
            f'@{response_file}', '-o', str(linked)]
@@ -57,10 +59,11 @@ def link_by_seriatum(name: str, to_link: list[Path], out_dir: Path, ld: str, ver
     return linked
 
 
-def link_all(name: str, to_link: list[Path], out_dir: Path, ld: str) -> Path:
+def link_all(name: str, to_link: list[Path], out_dir: Path, ld: str, info) -> Path:
     response_file = out_dir / f'{name}.txt'
     linked = out_dir / f'{name}_linked'
-    print("[LINKER PROGRESS] Performing final link...")
+    if info.args['progress_reports']:
+        print("[LINKER PROGRESS] Performing final link...")
     response_file.write_text('\n'.join(str(o).replace('\\', '/') for o in to_link))
     cmd = [ld, '--entry=0', '--no-warn-mismatch',
            f'@{response_file}', '-o', str(linked)]

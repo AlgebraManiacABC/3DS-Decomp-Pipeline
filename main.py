@@ -41,7 +41,7 @@ def main(argv: list[str]) -> int:
         errored = []
         num_to_compile = len(to_compile)
         for i, c in enumerate(to_compile):
-            if info.args.report_progress and i % int(num_to_compile / 100) == 0:
+            if info.args['progress_reports'] and i % int(num_to_compile / 100) == 0:
                 print(f"[COMPILER PROGRESS] {i/num_to_compile:.1f}%")
             if c.name in ignore_list:
                 continue
@@ -56,7 +56,7 @@ def main(argv: list[str]) -> int:
             print(" ".join(cmd))
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != EXIT_SUCCESS:
-                if info.args.ignore_compiler_errors:
+                if info.args['ignore_compiler_errors']:
                     print(f"Error compiling {c}! Skipping!")
                     errored.append(c)
                     continue
@@ -66,15 +66,17 @@ def main(argv: list[str]) -> int:
             cmd = [objcopy, f'--globalize-symbol={c.name}', str(bld)]
             subp_run(cmd, False, f"Objcopy error on {c}!")
             compiled.append(bld)
-        print("[COMPILER PROGRESS] 100%")
+        if info.args['progress_reports']:
+            print("[COMPILER PROGRESS] 100%")
 
         if errored:
             print(f"Error compiling {len(errored)} functions!! First 10:")
             for e in errored[0:10]:
                 print(e)
 
-        if info.args.compile_only:
-            print(f"COMPILATION OF {name.upper()} COMPLETE!")
+        if info.args['compile_only']:
+            if info.args['progress_reports']:
+                print(f"COMPILATION OF {name.upper()} COMPLETE!")
             continue
 
         # Split
@@ -88,7 +90,7 @@ def main(argv: list[str]) -> int:
 
         if info.recreating_binaries:
             # Link
-            linked = link_by_seriatum(name, to_link, info.out_dir, ld, False)
+            linked = link_by_seriatum(name, to_link, info.out_dir, ld, False, info)
 
             # Objcopy
             final_binary = recreate_binary(name, info.out_dir, objcopy, linked, info.binaries[name])
@@ -101,11 +103,13 @@ def main(argv: list[str]) -> int:
             if de_novo != existing:
                 raise Exception(f"Binary {name} was created, but does not match original!")
 
-            print(f"ROUND TRIP DECOMP COMPLETE FOR {name.upper()}!!")
+            if info.args['progress_reports']:
+                print(f"ROUND TRIP DECOMP COMPLETE FOR {name.upper()}!!")
         else:
-            print(f"OBJECT CREATION COMPLETE FOR {name.upper()}!!")
+            if info.args['progress_reports']:
+                print(f"OBJECT CREATION COMPLETE FOR {name.upper()}!!")
 
-    if not info.args.compile_only:
+    if not info.args['compile_only']:
         objdiff = {
             "$schema": "https://raw.githubusercontent.com/encounter/objdiff/main/config.schema.json",
             "build_target": False,
