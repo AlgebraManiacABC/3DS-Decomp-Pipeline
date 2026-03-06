@@ -70,9 +70,7 @@ class CTRPipelineInfo:
                  out_dir: Path, tool_dir: Path,
                  symbols: dict[str, list[Symbol]],
                  cc_info: dict[str, dict[str, dict]],
-                 recreating_binaries: bool,
-                 compile_only: bool,
-                 ignore_compiler_errors: bool):
+                 recreating_binaries: bool, args):
         self.working_dir = working_dir
         self.originals = originals
         self.binaries = binaries
@@ -84,12 +82,11 @@ class CTRPipelineInfo:
         self.symbols = symbols
         self.cc_info = cc_info
         self.recreating_binaries = recreating_binaries
-        self.compile_only = compile_only
-        self.ignore_compiler_errors = ignore_compiler_errors
+        self.args = args
 
     @classmethod
     def from_path(cls, working_dir: Path, recreating_binaries: bool,
-                  compile_only: bool, ignore_compiler_errors: bool) -> "CTRPipelineInfo":
+                  args) -> "CTRPipelineInfo":
         orig_dir = working_dir / 'orig'
         originals = list(orig_dir.rglob('*'))
         source_dir = working_dir / 'src'
@@ -129,8 +126,7 @@ class CTRPipelineInfo:
             symbols[f.stem] = sym_list
         cc_info = yaml.safe_load(cc_info_path.read_text())
         return cls(working_dir, originals, binaries, sources, build_dir, split_dir,
-                   out_dir, tool_dir, symbols, cc_info, recreating_binaries,
-                   compile_only, ignore_compiler_errors)
+                   out_dir, tool_dir, symbols, cc_info, recreating_binaries, args)
 
 
 def gather_bearings(argv: list[str]) -> CTRPipelineInfo:
@@ -165,6 +161,12 @@ def gather_bearings(argv: list[str]) -> CTRPipelineInfo:
         default=False,
         help="When the compiler fails, do not exit (will not report)"
     )
+    parser.add_argument(
+        "--progress-reports",
+        action="store_true",
+        default=True,
+        help="Whether to report [PROGRESS] __._% during compiling, splitting, and linking"
+    )
 
     args = parser.parse_args(argv[1:])
 
@@ -184,4 +186,4 @@ def gather_bearings(argv: list[str]) -> CTRPipelineInfo:
     if not working_dir:
         raise Exception("Did not pick a working directory!")
 
-    return CTRPipelineInfo.from_path(Path(args.dir), recreating_binaries, args.compile_only, args.ignore_compiler_errors)
+    return CTRPipelineInfo.from_path(Path(args.dir), recreating_binaries, args)

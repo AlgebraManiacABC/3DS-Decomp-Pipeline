@@ -39,7 +39,10 @@ def main(argv: list[str]) -> int:
         default = info.cc_info.get('default', None)
         ignore_list = info.cc_info.get(name,{}).get('ignored', [])
         errored = []
-        for c in to_compile:
+        num_to_compile = len(to_compile)
+        for i, c in enumerate(to_compile):
+            if info.args.report_progress and i % int(num_to_compile / 100) == 0:
+                print(f"[COMPILER PROGRESS] {i/num_to_compile:.1f}%")
             if c.name in ignore_list:
                 continue
             bld = info.build_dir / name / (c.stem + '.o')
@@ -53,7 +56,7 @@ def main(argv: list[str]) -> int:
             print(" ".join(cmd))
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != EXIT_SUCCESS:
-                if info.ignore_compiler_errors:
+                if info.args.ignore_compiler_errors:
                     print(f"Error compiling {c}! Skipping!")
                     errored.append(c)
                     continue
@@ -63,13 +66,14 @@ def main(argv: list[str]) -> int:
             cmd = [objcopy, f'--globalize-symbol={c.name}', str(bld)]
             subp_run(cmd, False, f"Objcopy error on {c}!")
             compiled.append(bld)
+        print("[COMPILER PROGRESS] 100%")
 
         if errored:
             print(f"Error compiling {len(errored)} functions!! First 10:")
             for e in errored[0:10]:
                 print(e)
 
-        if info.compile_only:
+        if info.args.compile_only:
             print(f"COMPILATION OF {name.upper()} COMPLETE!")
             continue
 
@@ -101,7 +105,7 @@ def main(argv: list[str]) -> int:
         else:
             print(f"OBJECT CREATION COMPLETE FOR {name.upper()}!!")
 
-    if not info.compile_only:
+    if not info.args.compile_only:
         objdiff = {
             "$schema": "https://raw.githubusercontent.com/encounter/objdiff/main/config.schema.json",
             "build_target": False,
