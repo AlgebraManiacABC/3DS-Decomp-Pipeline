@@ -131,10 +131,12 @@ def gather_bearings(argv: list[str]) -> CTRPipelineInfo:
     :return:
     """
 
-    if not HAS_TKINTER and len(argv) < 3:
+    if not HAS_TKINTER and len(argv) < 2:
         raise Exception(
             f"""
             Usage: python {Path(argv[0]).name} <dir>
+            
+                --recreateBinaries=[True/False]          If the program should attempt to link (key work being attempt)
             
             === OR ===
             (if tkinter installed)
@@ -143,7 +145,7 @@ def gather_bearings(argv: list[str]) -> CTRPipelineInfo:
             """
         )
 
-    if HAS_TKINTER and len(argv) < 3:
+    if HAS_TKINTER and len(argv) < 2:
         working_dir = filedialog.askdirectory(
             mustexist=True,
             title="Choose working directory"
@@ -154,7 +156,9 @@ def gather_bearings(argv: list[str]) -> CTRPipelineInfo:
                             "objects and recreate the original binaries?")
     else:
         working_dir = argv[1]
-        recreating_binaries = argv[2]
+        recreating_binaries = False
+        if len(argv) > 2:
+            recreating_binaries = argv[2] == '--recreateBinaries=True'
     if not working_dir:
         raise Exception("Did not pick a working directory!")
 
