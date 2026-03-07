@@ -38,11 +38,9 @@ def split_by_symbols(binary: CTRBinary, split_dir: Path, symbols: list[Symbol], 
             addrs.pop(0)
             sym = symbol_dict[cur_addr]
             sym_name = sym.name.replace('::', '__')
-            # Temporary: Completely clobber symbol size:
-            size = next_addr - cur_addr
-            symbol_bytes = bin_data[sym.addr:sym.addr + size]
-            cur_addr += size
-            sym = Symbol(sym.addr, sym_name, sym.mode, size)
+            symbol_bytes = bin_data[sym.addr:sym.addr + sym.size]
+            cur_addr += sym.size
+            sym = Symbol(sym.addr, sym_name, sym.mode, sym.size)
         else:
             symbol_bytes = bin_data[cur_addr:next_addr]
             name = f'{cur_addr:08x}'
