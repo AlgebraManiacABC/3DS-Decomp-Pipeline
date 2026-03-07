@@ -21,31 +21,48 @@ def split_by_symbols(binary: CTRBinary, split_dir: Path, symbols: list[Symbol], 
     bin_size = len(bin_data)
     print(f'Total binary size: {bin_size} (0x{bin_size:x})')
     symbol_dict = {sym.addr: sym for sym in symbols}
-    addrs = sorted([sym.addr for sym in symbols])
+    addrs = sorted([sym.addr for sym in symbols if sym.addr >= 0])
     addrs_to_log = set(addrs[i] for i in range(0, len(addrs), 100))
     splat = []
     all_o = []
+    total_symbol_size = {'inter': 0, 'named': 0}
     cur_addr = 0
-    while cur_addr < len(bin_data):
+
+    while addrs or cur_addr < bin_size:
+
         if info.args['progress_reports'] and cur_addr in addrs_to_log:
-            print(f"[SPLIT PROGRESS] {100 * cur_addr / len(bin_data):.2f}%")
-        next_addr = addrs[0] if addrs else len(bin_data)
-        while cur_addr > next_addr:
-            # print(f"Symbol at {next_addr} was overlapped by a preceding symbol! Ignoring")
-            addrs.pop(0)
-            next_addr = addrs[0] if addrs else len(bin_data)
-        if cur_addr == next_addr:
-            addrs.pop(0)
-            sym = symbol_dict[cur_addr]
-            sym_name = sym.name.replace('::', '__')
-            symbol_bytes = bin_data[sym.addr:sym.addr + sym.size]
+            print(f"[SPLIT PROGRESS] {100 * cur_addr / bin_size:.2f}%")
+
+        if not addrs:
+            # Fully finished, yet there are still trailing bytes
+            sym_name = f'{cur_addr:08x}'
+            symbol_bytes = bin_data[cur_addr:]
+            sym = Symbol(cur_addr, sym_name, '$d', bin_size - cur_addr)
+            total_symbol_size['inter'] += sym.size
             cur_addr += sym.size
-            sym = Symbol(sym.addr, sym_name, sym.mode, sym.size)
-        else:
-            symbol_bytes = bin_data[cur_addr:next_addr]
-            name = f'{cur_addr:08x}'
-            sym = Symbol(cur_addr, name, '$d', next_addr - cur_addr)
-            cur_addr = next_addr
+        elif cur_addr == addrs[0]:
+            # We reached a symbol definition; split it!
+            sym = symbol_dict[cur_addr]
+            sym_name = sanitize(sym.name)
+            sym_size = sym.size
+            next_addr = addrs[1] if len(addrs) > 1 else bin_size
+            if cur_addr + sym_size > next_addr:
+                sym_size = next_addr - cur_addr
+            symbol_bytes = bin_data[sym.addr:sym.addr+sym_size]
+            sym = Symbol(cur_addr, sym_name, sym.mode, sym_size)
+            cur_addr += sym.size
+            total_symbol_size['named'] += sym.size
+            addrs.pop(0)  # Remove the address after processing
+        elif cur_addr < addrs[0]:
+            # Current address needs to keep up! This is safe to treat as data.
+            sym_name = f'{cur_addr:08x}'
+            symbol_bytes = bin_data[cur_addr:addrs[0]]
+            sym = Symbol(cur_addr, sym_name, "$d", addrs[0] - cur_addr)
+            cur_addr = addrs[0]
+            total_symbol_size['inter'] += sym.size
+        else: # cur_addr > addrs[0]
+            # This should be impossible!!
+            raise RuntimeError(f"cur_addr ({cur_addr:08x}) grew beyond the next symbol (at {addrs[0]:08x})! Contact the developer!")
 
         o = ELF.from_bytes_single(symbol_bytes, sym)
         all_o.append(o)
@@ -53,9 +70,16 @@ def split_by_symbols(binary: CTRBinary, split_dir: Path, symbols: list[Symbol], 
         o.write(o_file)
         splat.append((sym.addr, o_file))
 
+
+    print(f'Total binary size: {bin_size} (0x{bin_size:x})')
     total_bin_data = sum([len(o.data) for o in all_o])
-    if total_bin_data != bin_size:
-        raise Exception(f"Mismatch in binary data! Expected {bin_size}, got {total_bin_data}!")
+    print(f'Total binary size from split objects: {total_bin_data} (0x{total_bin_data:x})')
+    print(f'Total binary size from symbols (named): {total_symbol_size["named"]} (0x{total_symbol_size["named"]:x})')
+    print(f'Total binary size from symbols (gaps): {total_symbol_size["inter"]} (0x{total_symbol_size["inter"]:x})')
+    total_symbol_size = total_symbol_size['named'] + total_symbol_size['inter']
+    print(f'Total binary size from symbols (all): {total_symbol_size} (0x{total_symbol_size:x})')
+    if total_bin_data != bin_size or bin_size != total_symbol_size:
+        raise Exception(f"Mismatch in binary data! Expected {bin_size}, got {total_bin_data} and {total_symbol_size}!")
 
     if info.args['progress_reports']:
         print("[SPLIT PROGRESS] 100.00%")
